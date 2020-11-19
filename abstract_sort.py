@@ -1,5 +1,5 @@
 """
-sort.py
+abstract_sort.py
 
 """
 import numpy as np
@@ -40,6 +40,31 @@ def parse_command_line(args):
 						type=int,
 						default=3
 						)
+	parser.add_argument('--judges_per_abstract_basic', 
+						action="store",
+						type=int,
+						default=7
+						)
+	parser.add_argument('--judges_per_abstract_clinical', 
+						action="store",
+						type=int,
+						default=5
+						)
+	parser.add_argument('--judges_per_abstract_public', 
+						action="store",
+						type=int,
+						default=4
+						)
+	parser.add_argument('--judges_per_abstract_heart', 
+						action="store",
+						type=int,
+						default=4
+						)
+	parser.add_argument('--judges_per_abstract_hom', 
+						action="store",
+						type=int,
+						default=4
+						)																									
 	parser.add_argument('--outdir', 
 						action="store", 
 						type=str, 
@@ -100,7 +125,7 @@ def write_abstract_assignments(abstract_assignments, judges_per_cat, outdir):
 		# ...
 		# abstract id 10 
 
-		with open(os.path.join(outdir, "abstract_assignments_%s"%cat.replace(" ", "_")), "w") as f: 
+		with open(os.path.join(outdir, "abstract_assignments_%s.csv"%cat.replace(" ", "_")), "w") as f: 
 
 			# write the header line
 			f.writelines(','.join(list(category_judges.columns)) + "\n")
@@ -113,7 +138,7 @@ def write_abstract_assignments(abstract_assignments, judges_per_cat, outdir):
 	return
 
 
-def sort_abstracts(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JUDGE_LIM=9): 
+def sort_abstracts(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JUDGE_LIM=10): 
 
 	print('sorting abstracts to judges')
 	print('-- judges per abstract: %d, max abstracts per judge: %d'%(JUDGES_PER_ABSTRACT, JUDGE_LIM))
@@ -165,7 +190,7 @@ def process_abstract_submissions(students_file):
 	print('='*30)
 
 	students = pd.read_excel('data/students.xlsx')
-	rng = np.random.default_rng()
+	rng = np.random.default_rng(seed=2021)
 	ids = rng.choice(np.arange(100, 999), size=len(students), replace=False)
 	students['ids'] = ids
 
@@ -175,6 +200,23 @@ def process_abstract_submissions(students_file):
 	print(students.head())
 
 	return students[['ids', 'Scholarly Concentration', 'Authors']], students[['ids', 'Scholarly Concentration']], students
+
+
+def confirm(id_df, abstract_assignments): 
+
+	assigned_ids = []
+
+	for cat, judge_dict in abstract_assignments.items():	
+		for name_key, judge_abstract_id_list in judge_dict.items():
+			assigned_ids += judge_abstract_id_list
+
+	assigned_ids = list(set(assigned_ids))
+
+	for abstract in id_df['ids']: 
+		if abstract not in assigned_ids: 
+			print('abstract %d in category %s was not assigned for judging'%(abstract, id_df[id_df['ids'] == abstract]['Scholarly Concentration']))
+
+	return 
 
 
 def main():
@@ -189,6 +231,14 @@ def main():
 		"History of Medicine",
 	]
 
+	category_hyperparam = {
+		"Basic Science": args['judges_per_abstract_basic'], 
+		"Clinical Science": args['judges_per_abstract_clinical'], 
+		"Public Health": args['judges_per_abstract_public'], 
+		"Ethics and the Art of Medicine": args['judges_per_abstract_heart'],
+		"History of Medicine": args['judges_per_abstract_hom'],
+	}
+
 	np.random.seed(2021)
 	random.seed(2021)
 
@@ -200,10 +250,15 @@ def main():
 	for cat in categories: 
 		abstract_assignments[cat] = sort_abstracts(
 										id_df.loc[id_df['Scholarly Concentration'] == cat], 
-										judges_per_cat[cat]
+										judges_per_cat[cat],
+										JUDGES_PER_ABSTRACT=category_hyperparam[cat]
 									)
 
+	confirm(id_df, abstract_assignments)
+
 	write_abstract_assignments(abstract_assignments, judges_per_cat, args['outdir'])
+
+	student_df.to_csv("assigned_ids_students.csv")
 
 	return
 
