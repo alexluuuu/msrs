@@ -1,40 +1,42 @@
-"""
-abstractsmail_merge_prep.py
+"""abstractsmail_merge_prep.py
+
+Given the abstracts that were separated into individual pages from `abstract_partition.py`, this file 
+runs the script to combine abstracts into single attachments for each judge, so that each document contains 
+[abs1, abs2, ..., abs_n] for the n abstracts assigned to each judge. 
+
 """
 import os
-import sys
 import pandas as pd
 from PyPDF2 import PdfFileReader, PdfFileWriter
 
 
-def main(): 
-	assignments_df = pd.read_excel("~/Downloads/MSRS 2021 Abstracts.xlsx", sheet_name="assignments")
+def main():
+    assignments_df = pd.read_excel(
+        "~/Downloads/MSRS 2021 Abstracts.xlsx", sheet_name="assignments")
 
-	# for col in ["Abs1", "Abs2", "Abs3", "Abs4", "Abs5", "Abs6", "Abs7", "Abs8", "Abs9", "Abs10"]: 
-	# 	assignments_df[col] = assignments_df[col].map(lambda x: str(int(x)) + ".pdf", na_action="ignore")
+    cols = ["Email Address", "First Name", "Last Name", "Abs1", "Abs2",
+            "Abs3", "Abs4", "Abs5", "Abs6", "Abs7", "Abs8", "Abs9", "Abs10"]
+    for idx, (merge_info) in assignments_df[cols].iterrows():
+        abs_ids = merge_info[3:]
 
-	# assignments_df.to_excel("output_merge_sheet.xlsx")
+        pdf_writer = PdfFileWriter()
 
-	cols = ["Email Address", "First Name", "Last Name", "Abs1", "Abs2", "Abs3", "Abs4", "Abs5", "Abs6", "Abs7", "Abs8", "Abs9", "Abs10"]
-	for idx, (merge_info) in assignments_df[cols].iterrows(): 
-		abs_ids = merge_info[3:]
+        for abs_id in abs_ids:
+            if pd.isnull(abs_id):
+                continue
 
-		pdf_writer = PdfFileWriter()
+            pdf_reader = PdfFileReader(os.path.join(
+                os.getcwd(), str(int(abs_id)) + ".pdf"))
+            for page in pdf_reader.pages:
+                pdf_writer.addPage(page)
 
-		for abs_id in abs_ids: 
-			if pd.isnull(abs_id):
-				continue
+        out = os.path.join(os.getcwd(), "MSRS_abstracts_Dr_%s_%s.pdf" % (
+            merge_info[1], merge_info[2]))
+        with open(out, "wb") as f:
+            pdf_writer.write(f)
 
-			pdf_reader = PdfFileReader(os.path.join(os.getcwd(), str(int(abs_id)) + ".pdf"))
-			for page in pdf_reader.pages: 
-				pdf_writer.addPage(page)
-
-		out = os.path.join(os.getcwd(), "MSRS_abstracts_Dr_%s_%s.pdf"%(merge_info[1], merge_info[2]))
-		with open(out, "wb") as f: 
-			pdf_writer.write(f)
-
-	return
+    return
 
 
 if __name__ == "__main__":
-	main()
+    main()
