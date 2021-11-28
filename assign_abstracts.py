@@ -1,4 +1,12 @@
-"""abstract_sort.py
+"""assign_abstracts.py
+
+Script for reading submitted assignments and the category of each judge to assign
+each judge a set of abstracts to judge.
+
+There will be two modes for abstract assignment:
+
+- specify number of judges per category
+- assign each judge as many abstracts as possible, up to some limit
 
 """
 import argparse
@@ -19,71 +27,40 @@ def parse_command_line():
         description='Sort student abstracts to faculty judges',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--students',
-                        action="store",
-                        type=str,
-                        default="data/students.xlsx",
+    parser.add_argument('--students', action="store", type=str, default="data/students.xlsx",
                         help="file containing abstract submissions"
                         )
-    parser.add_argument('--students_tab',
-                        action="store",
-                        type=str,
-                        default="assignmen",
+    parser.add_argument('--students_tab', action="store", type=str,
                         help="file containing abstract submissions"
                         )
-    parser.add_argument('--judges',
-                        action="store",
-                        type=str,
-                        default="judges2.xlsx",
+    parser.add_argument('--judges', action="store", type=str, default="judges2.xlsx",
                         help="excel file containing judges and category assignments"
                         )
-    parser.add_argument('--judges_tab',
-                        action="store",
-                        type=str,
-                        default="AssignedToCategories",
+    parser.add_argument('--judges_tab', action="store", type=str, default="AssignedToCategories",
                         help="the tab within the sheet to be read"
                         )
-    parser.add_argument('--judges_header',
-                        action="store",
-                        type=int,
-                        default=3,
+    parser.add_argument('--judges_header', action="store", type=int, default=3,
                         help="the row to use as header row"
                         )
-    parser.add_argument('--judges_per_abstract_basic',
-                        action="store",
-                        type=int,
-                        default=7,
+    parser.add_argument('--judges_per_abstract_basic', action="store", type=int, default=7,
                         help='number of judges per abstract for basic science'
                         )
-    parser.add_argument('--judges_per_abstract_clinical',
-                        action="store",
-                        type=int,
-                        default=5,
+    parser.add_argument('--judges_per_abstract_clinical', action="store", type=int, default=5,
                         help='number of judges per abstract for clinical science'
                         )
-    parser.add_argument('--judges_per_abstract_public',
-                        action="store",
-                        type=int,
-                        default=4,
+    parser.add_argument('--judges_per_abstract_public', action="store", type=int, default=4,
                         help='number of judges per abstract for public health'
                         )
-    parser.add_argument('--judges_per_abstract_heart',
-                        action="store",
-                        type=int,
-                        default=4,
+    parser.add_argument('--judges_per_abstract_heart', action="store", type=int, default=4,
                         help='number of judges per abstract for HEART'
                         )
-    parser.add_argument('--judges_per_abstract_hom',
-                        action="store",
-                        type=int,
-                        default=4,
+    parser.add_argument('--judges_per_abstract_hom', action="store", type=int, default=4,
                         help='number of judges per abstract for history of medicine'
                         )
-    parser.add_argument('--outdir',
-                        action="store",
-                        type=str,
-                        default='sorted',
-                        required=True,
+    parser.add_argument('--ignore_poster_only', action="store_true",
+                        help='do not assign abstracts if they are submitted as poster only'
+                        )
+    parser.add_argument('--outdir', action="store", type=str, default='sorted', required=True,
                         help='directory in which output files should be written'
                         )
 
@@ -101,21 +78,22 @@ def read_judge_cat_assign(judges_file: str, judges_tab: str, judges_header: int,
                            sheet_name=judges_tab, header=judges_header, engine='openpyxl')
 
     print('here are the columns read from the judging spreadsheet')
-    print(judges.columns)
+    pprint(list(judges.columns))
 
+    # for cleanliness
     judges.drop(columns=[
         'Basic Science',
         'Clinical Science',
         'Public Health',
-        'Ethics and the Art of Medicine',
+        'Humanism, Ethics, Education, and the Art of Medicine (HEART)',
         'History of Medicine',
         'Justification / Notes',
         'signed up for only 1 category',
-        'What activities would you like to judge at MSRS 2021? ',
+        'What activities would you like to judge at MSRS 2022? ',
         "What topic would you like to judge? If you are interested in multiple options, you'll be placed in whatever topic needs more judges. ",
         'Timestamp',
         "Would you like to recommend any colleagues who may be interested in judging? If so, please let us know their name(s) and affiliation(s). "
-    ], inplace=True)
+    ], inplace=True, errors='ignore')
 
     print(judges.head())
 
@@ -159,7 +137,7 @@ def write_abstract_assignments(abstract_assignments: dict, judges_per_cat: dict,
     return
 
 
-def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JUDGE_LIM=10):
+def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JUDGE_LIM=15):
 
     print('sorting abstracts to judges')
     print('-- judges per abstract: %d, max abstracts per judge: %d' %
@@ -171,19 +149,33 @@ def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JU
     judge_dict = {"%s %s" % (first.strip(), last.strip()): [] for first, last in zip(
         category_judges['First Name'], category_judges['Last Name'])}
 
-    for idx, (abs_id, cat, authors) in id_df.iterrows():
+    for idx, (abs_id, cat, authors, to_judge) in id_df.iterrows():
+
+        if to_judge != 'Yes':
+            print('abstract %d opt out' % (abs_id))
+            continue
 
         # reorder judges so that the assignment is not order dependent
-        shuffled_names = list(judge_dict.keys())
-        random.shuffle(shuffled_names)
+        # shuffled_names = list(judge_dict.keys())
+        # random.shuffle(shuffled_names)
+
+        names = [(name, len(judge_dict[name]), np.random.randn(1))
+                 for name in judge_dict.keys()]
+
+        # sort the judge names in ascending order by the number of abstracts that they have been assigned
+        # break ties at each level using rng so that there is still random shuffling
+        names.sort(key=lambda x: (x[1], x[2]))
+
+        # pull out just the name field again
+        shuffled_names = [name[0] for name in names]
 
         # keep track of whether assignments are successful
         status = [False]*JUDGES_PER_ABSTRACT
 
-        # assign each abstract to a pre-defined number of judges
+        # assign each abstract to the pre-defined number of judges
         for iteration in range(JUDGES_PER_ABSTRACT):
 
-            # iterate over judges to see if any are free to judge the abstract
+            # loop over judges to see if any are free to judge the abstract
             for name in shuffled_names:
                 cur_abs = judge_dict[name]
 
@@ -198,9 +190,8 @@ def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JU
                     break
 
         if not all(status):
-            print('oh no! only able to assign abstract id %d to %d / %d judges' % (abs_id,
-                                                                                   sum(status),
-                                                                                   JUDGES_PER_ABSTRACT))
+            print('oh no! only able to assign abstract id %d to %d / %d judges' %
+                  (abs_id, sum(status), JUDGES_PER_ABSTRACT))
 
     print(judge_dict)
 
@@ -214,7 +205,7 @@ def preprocess_abstract_submissions(students_file) -> Union[pd.DataFrame, pd.Dat
 
     students = pd.read_excel(students_file)
     rng = np.random.default_rng(seed=2022)
-    ids = rng.choice(np.arange(100, 999), size=len(students), replace=False)
+    ids = rng.choice(np.arange(100, 300), size=len(students), replace=False)
     students['ids'] = ids
 
     students['Scholarly Concentration'] = students['Scholarly Concentration'].apply(lambda x: x.replace(
@@ -223,7 +214,7 @@ def preprocess_abstract_submissions(students_file) -> Union[pd.DataFrame, pd.Dat
     print(ids)
     print(students.head())
 
-    return students[['ids', 'Scholarly Concentration', 'Authors']], students
+    return students[['ids', 'Scholarly Concentration', 'Authors', 'Are you interested in being considered for an oral or podium presentation?']], students
 
 
 def quality_check(id_df: pd.DataFrame, abstract_assignments: dict) -> bool:
@@ -236,13 +227,14 @@ def quality_check(id_df: pd.DataFrame, abstract_assignments: dict) -> bool:
 
     assigned_ids = list(set(assigned_ids))
 
-    for abstract in id_df['ids']:
-        if abstract not in assigned_ids:
-            print('abstract %d in category %s was not assigned for judging' % (
-                abstract, id_df[id_df['ids'] == abstract]['Scholarly Concentration']))
-            return False
+    any = 0
+    for idx, (abstract, cat, authors, to_judge) in id_df.iterrows():
+        if (to_judge == 'Yes') and (abstract not in assigned_ids):
+            print('abstract %d in category %s was not assigned for judging. authors: %s' % (
+                abstract, cat, authors))
+            any += 1
 
-    return True
+    return (any == 0)
 
 
 def main():
