@@ -10,18 +10,29 @@ There will be two modes for abstract assignment:
 
 """
 import argparse
+import logging
 import os
 import random
-from typing import Union
 from pprint import pprint
+from typing import Dict, List, Union
 
 import numpy as np
 import pandas as pd
+from rich.logging import RichHandler
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="DEBUG",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+log = logging.getLogger(__name__)
 
 
 def parse_command_line():
-    print('parsing command line')
-    print('='*30)
+    log.debug('parsing command line')
+    log.debug('='*30)
 
     parser = argparse.ArgumentParser(
         description='Sort student abstracts to faculty judges',
@@ -65,20 +76,20 @@ def parse_command_line():
                         )
 
     args = vars(parser.parse_args())
-    pprint(args)
+    log.debug(args)
     return args
 
 
 def read_judge_cat_assign(judges_file: str, judges_tab: str, judges_header: int, categories: list) -> dict:
 
-    print('reading judge assignments from file %s' % judges_file)
-    print('='*30)
+    log.info('reading judge assignments from file %s' % judges_file)
+    log.info('='*30)
 
     judges = pd.read_excel(judges_file,
                            sheet_name=judges_tab, header=judges_header, engine='openpyxl')
 
-    print('here are the columns read from the judging spreadsheet')
-    pprint(list(judges.columns))
+    log.debug('here are the columns read from the judging spreadsheet')
+    log.debug(list(judges.columns))
 
     # for cleanliness
     judges.drop(columns=[
@@ -95,64 +106,101 @@ def read_judge_cat_assign(judges_file: str, judges_tab: str, judges_header: int,
         "Would you like to recommend any colleagues who may be interested in judging? If so, please let us know their name(s) and affiliation(s). "
     ], inplace=True, errors='ignore')
 
-    print(judges.head())
-
     output_cols = ['Email Address', 'First Name', 'Last Name', ]
 
     judges_per_cat = {}
     for cat in categories:
         judges_per_cat[cat] = judges.loc[(judges["Would you like to judge student abstracts?"] == "Yes") & (
             judges["Assignment"] == cat)][output_cols].copy()
-        print(judges_per_cat[cat].to_string())
+
+        log.debug('judges for category %s' % cat)
+        log.debug('='*30)
+        log.debug(judges_per_cat[cat].to_string())
 
     return judges_per_cat
 
 
-def write_abstract_assignments(abstract_assignments: dict, judges_per_cat: dict, outdir: str) -> None:
+def write_abstract_assignments(abstract_assignments: dict, judges_per_cat: Dict[str, pd.DataFrame], outdir: str) -> None:
+    """write_abstract_assignments
 
-    print('writing the abstract assignments for each judge to file')
-    print('='*30)
+    Function for writing out all of the judging assignments. 
 
+    abstract_assignments is a dictionary that maps [category] -> [a dictionary ]
+    where each sub-dictionary is a mapping of [judge name] -> [list of abstract ids]
+
+    judges_per_cat is a dictionary that maps [category] -> pandas dataframe of the 
+    judging information, e.g. name, email, etc. 
+
+    Args:
+        abstract_assignments (dict): dictionary of abstract assignments 
+        judges_per_cat (dict): dictionary of judge information dataframes  
+        outdir (str): directory where judge abstract assignments should be written
+    """
+    log.info('writing the abstract assignments for each judge to file')
+    log.info('='*30)
+
+    # first, we will write all of the abstract assignments in one file for each of the categories
     for cat, judge_dict in abstract_assignments.items():
         category_judges = judges_per_cat[cat]
 
+        # we expect category_judges to be a df with the following columns:
         # judge email
         # judge first name
         # judge last name
-        # abstract id 1
-        # ...
-        # abstract id 10
 
         with open(os.path.join(outdir, "abstract_assignments_%s.csv" % cat.replace(" ", "_")), "w") as f:
 
-            # write the header line
-            f.writelines(','.join(list(category_judges.columns)) + "\n")
+            # write the header line. We need to add Abs 1 ... Abs n to the column headers also.
+            f.writelines(','.join(
+                list(category_judges.columns) + ['Abs%d' % i for i in range(1, 16)]) + "\n")
 
+            # iterate over the judges to write out each judge's assigned abstracts
             for idx, (email, first, last) in category_judges.iterrows():
                 name_key = "%s %s" % (first.strip(), last.strip())
                 judge_abstract_id_list = judge_dict[name_key]
                 f.writelines(
                     ','.join([email, first, last] + list(map(str, judge_abstract_id_list))) + "\n")
 
+    # write out an additional file that contains all of the judge abstract assignments,
+    # instead of as individual files.
+    with open(os.path.join(outdir, 'unified.csv'), 'w') as f:
+
+        # write the header line. This time, it will be [category] [email] [first] [last] [abs 1] ... [abs n]
+        f.writelines(','.join(
+            ['category'] + list(category_judges.columns) + ['Abs%d' % i for i in range(1, 16)])
+            + "\n")
+
+        # again, iterate over all judges in all categories
+        for cat, judge_dict in abstract_assignments.items():
+            category_judges = judges_per_cat[cat]
+
+            for idx, (email, first, last) in category_judges.iterrows():
+                name_key = "%s %s" % (first.strip(), last.strip())
+                judge_abstract_id_list = judge_dict[name_key]
+                f.writelines(
+                    ','.join([cat.replace(',', ';'), email, first, last] + list(map(str, judge_abstract_id_list))) + "\n")
+
     return
 
 
 def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JUDGE_LIM=15):
 
-    print('sorting abstracts to judges')
-    print('-- judges per abstract: %d, max abstracts per judge: %d' %
-          (JUDGES_PER_ABSTRACT, JUDGE_LIM))
-    print('='*30)
+    log.info('sorting abstracts to judges')
+    log.info('-- judges per abstract: %d, max abstracts per judge: %d' %
+             (JUDGES_PER_ABSTRACT, JUDGE_LIM))
+    log.info('='*30)
 
     id_df = id_df.sample(frac=1).reset_index(drop=True)
-    print(id_df.head())
     judge_dict = {"%s %s" % (first.strip(), last.strip()): [] for first, last in zip(
         category_judges['First Name'], category_judges['Last Name'])}
 
+    opted_out = []
+    judge_conflict_identified = []
     for idx, (abs_id, cat, authors, to_judge) in id_df.iterrows():
 
         if to_judge != 'Yes':
-            print('abstract %d opt out' % (abs_id))
+            log.debug('abstract %d opt out' % (abs_id))
+            opted_out.append(abs_id)
             continue
 
         # reorder judges so that the assignment is not order dependent
@@ -184,26 +232,36 @@ def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JU
                 # 	- judge is not an author on the abstract
                 # 	- judge has not already been assigned the abstract
 
+                if search_judge_conflicts(name, authors):
+                    judge_conflict_identified.append((name, abs_id))
+                    shuffled_names.remove(name)
+                    log.warning('judge conflict: %s %s %s' %
+                                (abs_id, name, authors))
+
                 if (len(cur_abs) < JUDGE_LIM) and (name not in authors) and (abs_id not in cur_abs):
                     judge_dict[name].append(abs_id)
                     status[iteration] = True
                     break
 
         if not all(status):
-            print('oh no! only able to assign abstract id %d to %d / %d judges' %
-                  (abs_id, sum(status), JUDGES_PER_ABSTRACT))
+            log.warning('oh no! only able to assign abstract id %d to %d / %d judges' %
+                        (abs_id, sum(status), JUDGES_PER_ABSTRACT))
 
-    print(judge_dict)
+    log.info('opted out: %s ' % opted_out)
+    log.info('judge conflicts: %s' % judge_conflict_identified)
+    log.info('final judging assignments:')
+    for k, v in judge_dict.items():
+        log.info('%s ; \t\t %s' % (k, v))
 
     return judge_dict
 
 
-def preprocess_abstract_submissions(students_file) -> Union[pd.DataFrame, pd.DataFrame]:
+def preprocess_abstract_submissions(students_file, students_tab) -> Union[pd.DataFrame, pd.DataFrame]:
 
-    print('processing abstract submissions')
-    print('='*30)
+    log.info('processing abstract submissions')
+    log.info('='*30)
 
-    students = pd.read_excel(students_file)
+    students = pd.read_excel(students_file, sheet_name=students_tab)
     rng = np.random.default_rng(seed=2022)
     ids = rng.choice(np.arange(100, 300), size=len(students), replace=False)
     students['ids'] = ids
@@ -211,8 +269,7 @@ def preprocess_abstract_submissions(students_file) -> Union[pd.DataFrame, pd.Dat
     students['Scholarly Concentration'] = students['Scholarly Concentration'].apply(lambda x: x.replace(
         "Humanism, Ethics, Education, and the Art of Medicine", "Humanism, Ethics, Education, and the Art of Medicine (HEART)"))
 
-    print(ids)
-    print(students.head())
+    log.debug(ids)
 
     return students[['ids', 'Scholarly Concentration', 'Authors', 'Are you interested in being considered for an oral or podium presentation?']], students
 
@@ -230,11 +287,47 @@ def quality_check(id_df: pd.DataFrame, abstract_assignments: dict) -> bool:
     any = 0
     for idx, (abstract, cat, authors, to_judge) in id_df.iterrows():
         if (to_judge == 'Yes') and (abstract not in assigned_ids):
-            print('abstract %d in category %s was not assigned for judging. authors: %s' % (
+            log.warning('abstract %d in category %s was not assigned for judging. authors: %s' % (
                 abstract, cat, authors))
             any += 1
 
     return (any == 0)
+
+
+def search_judge_conflicts(judge_name: str, authors_list: str) -> bool:
+    """search_judge_conflicts
+
+    More advanced method of searching for judge name within the authors list. 
+
+    Separates the judge name by white space. We know that judge_name is going to be 
+    just first name and last name. 
+
+    Separates the authors list by commas, then each chunk is separated by spaces. 
+
+    This means if we have judge name as [Billy Osler] and author list as 
+    [William Halsted, Billy H Osler], this will return True. 
+
+    A simple string matching alone would not have returned True. 
+
+    i.e. this matches first name + last name while ignoring optional middle initial.
+
+    Args:
+        judge_name (str): name of judge
+        authors_list (str): str of all authors
+
+    Returns:
+        bool: [description]
+    """
+    judge_name_chunks = judge_name.lower().split(' ')
+    parsed_chunks = [author.strip().lower().split(' ')
+                     for author in authors_list.split(',')]
+    for author_chunks in parsed_chunks:
+        if all([chunk in author_chunks for chunk in judge_name_chunks]):
+            log.debug('judge name found in authors list: %s %s' %
+                      (judge_name, authors_list))
+            return True
+
+    return False
 
 
 def main():
@@ -260,13 +353,16 @@ def main():
     np.random.seed(2022)
     random.seed(2022)
 
-    id_df, student_df = preprocess_abstract_submissions(args['students'])
+    id_df, student_df = preprocess_abstract_submissions(
+        args['students'], args['students_tab'])
+    log.info('processing %d abstract submissions' % (len(id_df)))
 
     judges_per_cat = read_judge_cat_assign(
         args['judges'], args['judges_tab'], args['judges_header'], categories)
 
     abstract_assignments = {}
     for cat in categories:
+        log.info('category: %s' % cat)
         abstract_assignments[cat] = assign_abstracts_to_judges(
             id_df.loc[id_df['Scholarly Concentration'] == cat],
             judges_per_cat[cat],

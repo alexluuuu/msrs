@@ -7,8 +7,8 @@ corresponding to that abstract.
 
 This was the easiest way that I found to write all of the abstracts to individual pdfs.
 
-Once the abstracts are as individual pdfs, we read the excel file containing the assignment of 
-abstracts to judges and combine all of each judge's abstracts into a single file, 
+Once the abstracts are as individual pdfs, we read the excel file containing the assignment of
+abstracts to judges and combine all of each judge's abstracts into a single file,
 with filename based on the judge name for easy attachment :).
 
 """
@@ -17,6 +17,7 @@ from pprint import pprint
 from PyPDF2 import PdfFileReader, PdfFileWriter
 import pandas as pd
 import argparse
+import shutil
 
 
 def parse_command_line() -> dict:
@@ -35,7 +36,8 @@ def parse_command_line() -> dict:
     parser.add_argument('--outdir', type=str, action='store',
                         help='directory where each of the abstract bundles should be generated to')
 
-    args = vars(parser.args())
+    args = vars(parser.parse_args())
+    print('--- received the following commandline arguments')
     pprint(args)
     return args
 
@@ -46,7 +48,8 @@ def main():
     # pdf_path = "/Users/alex/Desktop/HOPKINS/MSRS/mailmerge_abstract_judging_merged.pdf"
     pdf_reader = PdfFileReader(args['abstract_pdf'])
 
-    abstract_df = pd.read_excel(args['submissions'])
+    abstract_df = pd.read_excel(
+        args['submissions'], sheet_name='remove repeats')
     ids = list(abstract_df['ids'])
 
     # create the file for the outputs if it does not exist
@@ -66,7 +69,7 @@ def main():
 
         abs_id = ids[page_idx]
         outfile = os.path.join(
-            args['outdir'], "%d.pdf" % abs_id)
+            args['outdir'], 'intermediates', "%d.pdf" % abs_id)
 
         pdf_writer = PdfFileWriter()
         pdf_writer.addPage(page)
@@ -79,30 +82,53 @@ def main():
         print('completing without bundling abstracts')
         exit()
 
-    assignments_df = pd.read_excel(args['judging'])
+    if '.xls' in args['judging']:
+        assignments_df = pd.read_excel(args['judging'])
+    else:
+        assignments_df = pd.read_csv(args['judging'], )
 
-    cols = ["Email Address", "First Name", "Last Name", "Abs1", "Abs2",
-            "Abs3", "Abs4", "Abs5", "Abs6", "Abs7", "Abs8", "Abs9", "Abs10"]
-    for idx, (merge_info) in assignments_df[cols].iterrows():
-        abs_ids = merge_info[3:]
+    # cols = ["Email Address", "First Name", "Last Name", "Abs1", "Abs2",
+    #         "Abs3", "Abs4", "Abs5", "Abs6", "Abs7", "Abs8", "Abs9", "Abs10", "Abs"]
+    # print(assignments_df.head())
+    # for idx, (cat, *merge_info) in assignments_df.iterrows():
+    with open(args['judging'], 'r') as f:
+        # skip the first line bc its a header lol
+        _ = f.readline()
+        line = f.readline()
 
-        pdf_writer = PdfFileWriter()
+        while line:
+            cat, *merge_info = line.strip().split(',')
 
-        # conmbine the individual pdfs together
-        for abs_id in abs_ids:
-            if pd.isnull(abs_id):
-                continue
+            judge_path = os.path.join(args['outdir'], "MSRS_abstracts_Dr_%s_%s.pdf" % (
+                merge_info[1], merge_info[2]))
 
-            pdf_reader = PdfFileReader(os.path.join(
-                args['outdir'], str(int(abs_id)) + ".pdf"))
-            for page in pdf_reader.pages:
-                pdf_writer.addPage(page)
+            # os.makedirs(judge_directory, exist_ok=True)
 
-        out = os.path.join(args['outdir'], "MSRS_abstracts_Dr_%s_%s.pdf" % (
-            merge_info[1], merge_info[2]))
+            abs_ids = merge_info[3:]
 
-        with open(out, "wb") as f:
-            pdf_writer.write(f)
+            print(merge_info)
+            pdf_writer = PdfFileWriter()
+
+            # conmbine the individual pdfs together
+            for abs_id in abs_ids:
+                if pd.isnull(abs_id):
+                    continue
+
+                pdf_reader = PdfFileReader(os.path.join(
+                    args['outdir'], 'intermediates', str(int(abs_id)) + ".pdf"))
+                for page in pdf_reader.pages:
+                    pdf_writer.addPage(page)
+
+                # individual_pdf_path = os.path.join(
+                #     args['outdir'], 'intermediates', str(int(abs_id)) + ".pdf")
+
+                # shutil.copy(individual_pdf_path, os.path.join(
+                #     judge_directory, str(int(abs_id)) + ".pdf"))
+
+            with open(judge_path, "wb") as out_fp:
+                pdf_writer.write(out_fp)
+
+            line = f.readline()
 
     return
 
