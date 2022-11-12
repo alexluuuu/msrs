@@ -12,7 +12,13 @@ Here we'll try to track some of the scripts that we use to automate MSRS. Studen
 
 ## Commandline Interface
 
+
 generating the abstract assignments: 
-```python assign_abstracts.py --students MSRS2021/inputs/student_abstracts.xlsx --students_tab "remove repeats" --judges MSRS2021/inputs/judge_categories.xlsx --judges_tab AssignedToCategories --judges_header 4 --judges_per_abstract_basic 8 --judges_per_abstract_clinical 2 --judges_per_abstract_public 3 --judges_per_abstract_heart 5 --judges_per_abstract_hom 3 --outdir MSRS2021/abstract_assignments/```
+
+```python 
+
+assign_abstracts.py --students MSRS2021/inputs/student_abstracts.xlsx --students_tab "remove repeats" --judges MSRS2021/inputs/judge_categories.xlsx --judges_tab AssignedToCategories --judges_header 4 --judges_per_abstract_basic 8 --judges_per_abstract_clinical 2 --judges_per_abstract_public 3 --judges_per_abstract_heart 5 --judges_per_abstract_hom 3 --outdir MSRS2021/abstract_assignments/
+
+```
 
 
