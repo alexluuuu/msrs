@@ -64,7 +64,7 @@ For `assign_abstracts.py`:
 
 `--judges_header`: use this to specify which row the list of judges starts from. (e.g. if there are category metrics for tracking judge responses, these should go above the header row and this argument enables them to be seamlessly ignored by `pandas` dataframe loading. 
 
-```
+```console
 --judges_per_abstract_basic 8 --judges_per_abstract_clinical 2 --judges_per_abstract_public 3 --judges_per_abstract_heart 5 --judges_per_abstract_hom 3
 ``` 
 use this to specify how many judges should see each abstract. 
