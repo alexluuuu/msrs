@@ -43,7 +43,7 @@ Overall input structure / directory organization in this example:
 
 ### Example script call to generate the abstract assignments: 
 
-```python 
+```console 
 
 python assign_abstracts.py --students MSRS2021/inputs/student_abstracts.xlsx --students_tab "PROCESSING_READY" --judges MSRS2021/inputs/judge_categories.xlsx --judges_tab ASSIGNED_TO_CATEGORIES --judges_header 4 --judges_per_abstract_basic 8 --judges_per_abstract_clinical 2 --judges_per_abstract_public 3 --judges_per_abstract_heart 5 --judges_per_abstract_hom 3 --outdir MSRS2021/abstract_assignments/
 
