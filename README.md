@@ -39,9 +39,13 @@ python assign_abstracts.py --students MSRS2021/inputs/student_abstracts.xlsx --s
 For `assign_abstracts.py`: 
 
 `--students`: use this to speicfy the path to the Excel sheet which contains the student abstract submissions. 
+
 `--students_tab`: use this to specify the name of the tab within the Excel sheet that needs to be processed. i.e. if you remove duplicates, preprocess, etc the student submissions but not in the tab that the survey responses are populated into, then specify that here. In the above example, the students tab is named "PROCESSING_READY"
+
 `--judges`: use this to speicfy the path to the Excel sheet which contains the judge information, and which judge has been assigned to which judging category. 
+
 `--judges_tab`: similar to the `--students_tab` flag, use this to specify which tab of the Excel sheet contains the judges assigned ot their categories. 
+
 `--judges_header`: use this to specify which row the list of judges starts from. (e.g. if there are category metrics for tracking judge responses, these should go above the header row and this argument enables them to be seamlessly ignored by `pandas` dataframe loading. 
 
 ```
@@ -59,7 +63,7 @@ For `preprocess_abs.py`:
 Usage for this script is much easier to understand 
 
 ```console
-(conda_env) alex@…/Desktop/HOPKINS/MSRS preprocess_abs.py -h   
+preprocess_abs.py -h   
 
 usage: preprocess_abs.py [-h] --abstract_pdf ABSTRACT_PDF --submissions SUBMISSIONS --judging JUDGING [--bundle_abstracts] [--outdir OUTDIR]
 
