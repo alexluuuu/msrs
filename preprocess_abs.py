@@ -17,7 +17,6 @@ from pprint import pprint
 from PyPDF2 import PdfFileReader, PdfFileWriter
 import pandas as pd
 import argparse
-import shutil
 
 
 def parse_command_line() -> dict:
