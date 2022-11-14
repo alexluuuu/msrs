@@ -68,9 +68,6 @@ def parse_command_line():
     parser.add_argument('--judges_per_abstract_hom', action="store", type=int, default=4,
                         help='number of judges per abstract for history of medicine'
                         )
-    parser.add_argument('--ignore_poster_only', action="store_true",
-                        help='do not assign abstracts if they are submitted as poster only'
-                        )
     parser.add_argument('--outdir', action="store", type=str, default='sorted', required=True,
                         help='directory in which output files should be written'
                         )
@@ -105,6 +102,8 @@ def read_judge_cat_assign(judges_file: str, judges_tab: str, judges_header: int,
         'Timestamp',
         "Would you like to recommend any colleagues who may be interested in judging? If so, please let us know their name(s) and affiliation(s). "
     ], inplace=True, errors='ignore')
+    # NOTE: i have errors in the above set to ignore! be careful about this, as some issues
+    #       may cause silent failures.
 
     output_cols = ['Email Address', 'First Name', 'Last Name', ]
 
@@ -256,8 +255,32 @@ def assign_abstracts_to_judges(id_df, category_judges, JUDGES_PER_ABSTRACT=4, JU
     return judge_dict
 
 
-def preprocess_abstract_submissions(students_file, students_tab) -> Union[pd.DataFrame, pd.DataFrame]:
+def preprocess_abstract_submissions(students_file: str, students_tab: str) -> Union[pd.DataFrame, pd.DataFrame]:
+    """preprocess_abstract_submissions
 
+    This preprocessing step is used to do the following: 
+        1) introduce random abstract ID for each student so that we can refer to 
+            abstracts by the ID number, and not by the student name
+        2) replace the column name "Humanism, Ethics, Education, and the Art of Medicine" 
+            with the column name:  "Humanism, Ethics, Education, and the Art of Medicine (HEART)"
+
+            This second step may be replaced or changed if it is no longer necessary.
+
+    Note that here we make some assumptions about the names of the columns in teh spread sheet. e.g. 
+    ['ids', 
+     'Scholarly Concentration', 
+     'Authors', 
+     'Are you interested in being considered for an oral or podium presentation?'
+     ]
+
+    Args:
+        students_file (str): student abstract submission file
+        students_tab (str): student abstract submission file, which tab 
+
+    Returns:
+        Union[pd.DataFrame, pd.DataFrame]: the preprocessed dataframe containing only a specific
+                                           set of columns, and the full dataframe. 
+    """ 
     log.info('processing abstract submissions')
     log.info('='*30)
 
@@ -269,13 +292,33 @@ def preprocess_abstract_submissions(students_file, students_tab) -> Union[pd.Dat
     students['Scholarly Concentration'] = students['Scholarly Concentration'].apply(lambda x: x.replace(
         "Humanism, Ethics, Education, and the Art of Medicine", "Humanism, Ethics, Education, and the Art of Medicine (HEART)"))
 
+    log.debug('the following IDs were generated for student abstracts: ')
     log.debug(ids)
 
     return students[['ids', 'Scholarly Concentration', 'Authors', 'Are you interested in being considered for an oral or podium presentation?']], students
 
 
 def quality_check(id_df: pd.DataFrame, abstract_assignments: dict) -> bool:
+    """quality_check
 
+    This is a function used as a quality check to see whether the abstract assignment process
+    has left out any abstracts from getting assigned to judges, for any possible reasons. 
+    
+    In the current version of the code, no output will be written from this script if 
+    the sanity check is not passed. 
+
+    Args:
+        id_df (pd.DataFrame): dataframe which contains the student abstract submissions, along with their random IDs
+        abstract_assignments (dict): dictionary representing which abstracts have been assigned to which judges. 
+
+    id_df is a dataframe which should have the columns: 
+        - abstract id 
+        - abstract category
+        - authors list 
+        - whether the abstract should be sent out for judging 
+    Returns:
+        bool: False if there are any abstracts not assigned to judges. 
+    """
     assigned_ids = []
 
     for cat, judge_dict in abstract_assignments.items():
@@ -310,6 +353,9 @@ def search_judge_conflicts(judge_name: str, authors_list: str) -> bool:
     A simple string matching alone would not have returned True. 
 
     i.e. this matches first name + last name while ignoring optional middle initial.
+
+    TODO: I forget if this picks up the case in which people optionally include their
+          degree in the name field smh. 
 
     Args:
         judge_name (str): name of judge
@@ -350,9 +396,12 @@ def main():
         "History of Medicine": args['judges_per_abstract_hom'],
     }
 
+    # NOTE: these seeds allow for the abstract assignment process to be random, yet REPRODUCIBLE. 
+    #       if you want a different realization of the randomness, change the seed. 
     np.random.seed(2022)
     random.seed(2022)
 
+    log.info('preprocessing abstract submissions')
     id_df, student_df = preprocess_abstract_submissions(
         args['students'], args['students_tab'])
     log.info('processing %d abstract submissions' % (len(id_df)))
