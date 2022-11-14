@@ -4,6 +4,20 @@ Here we'll try to track some of the scripts that we use to automate MSRS. Studen
 
 ## Workflow
 
+0. Make sure that the environment is set up properly. There are some dependencies for the scripts to work: 
+
+```
+rich
+pandas
+PyPDF2
+```
+
+https://anaconda.org/conda-forge/rich/
+
+https://pandas.pydata.org/docs/getting_started/install.html
+
+https://pypi.org/project/PyPDF2/
+
 1. Given the excel or csv that contains the judging information, and the list of student abstract submissions, use `abstract_sort.py` to automatically assign abstracts -> judges. 
 
 2. Use a word doc mail merge -> generate a pdf where each page contains the abstracts, where the order of the pages is the same as the order of the index list. Note that this mail merge should be ANONYMIZED in an attempt to mitigate judge bias -- it should only include the abstract ID, and not the student name or the list of authors. 
@@ -24,6 +38,8 @@ Overall input structure / directory organization in this example:
       * the tab within the .xlsx file that we want to parse is titled "PROCESSING_READY"
     * file `judge_categories.xlsx` which contains the judge information (i.e. each row has the judge and what category they got assigned to) 
       * the tab within the .xlsx file that we want to parse is titled "ASSIGNED_TO_CATEGORIES"
+  * subfolder `abstract_assignments` -- where the outputs from `assign_abstracts.py` will be generated to. 
+  * subfolder `attachments` -- where the attachments from `preprocess_abs.py` will be generated to.
 
 ### Example script call to generate the abstract assignments: 
 
